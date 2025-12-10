@@ -49,7 +49,6 @@ def create_pipeline():
     detectionNetwork.setCoordinateSize(4)
     detectionNetwork.setAnchors([10,14, 23,27, 37,58, 81,82, 135,169, 344,319]) 
     detectionNetwork.setAnchorMasks({"side26": [1,2,3], "side13": [3,4,5]})
-    detectionNetwork.setInputSize(640, 640)
 
     # Outputs
     xoutRgb = pipeline.create(dai.node.XLinkOut)
