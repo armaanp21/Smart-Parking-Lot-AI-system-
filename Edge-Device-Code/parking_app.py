@@ -74,9 +74,9 @@ class ParkingSystem:
         try:
             self.dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
             self.table = self.dynamodb.Table(DYNAMO_TABLE_NAME)
-            print("✅ AWS Connected")
+            print("AWS Connected")
         except:
-            print("⚠️ AWS Connection Failed")
+            print("AWS Connection Failed")
 
         # Start Camera Thread
         self.thread = threading.Thread(target=self.run_oak_d)
@@ -193,7 +193,7 @@ class ParkingSystem:
 system = ParkingSystem()
 
 st.set_page_config(page_title="Parking AI", layout="wide")
-st.title("🅿️ Smart Parking System")
+st.title("Smart Parking System")
 
 # Status Bar
 col1, col2 = st.columns(2)
@@ -230,7 +230,7 @@ if mode == "Setup / Calibration":
             key="canvas_parking"
         )
         
-        if st.button("💾 Save Configuration"):
+        if st.button("Save Configuration"):
             if canvas.json_data:
                 new_spots = []
                 for i, obj in enumerate(canvas.json_data["objects"]):
