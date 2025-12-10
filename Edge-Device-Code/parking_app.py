@@ -16,17 +16,15 @@ MODEL_PATH = "models/parking_model.blob"
 CONFIG_FILE = "parking_config.json"
 DYNAMO_TABLE_NAME = "ParkingData"
 AWS_REGION = "us-east-1"
-CONFIDENCE_THRESHOLD = 0.5
+CONFIDENCE_THRESHOLD = 0.3  # Lowered for screen demo (glare/reflection)
 IOU_THRESHOLD = 0.5
 
-# --- HELPER: YOLOv8 DECODER (The Math) ---
+# --- HELPER: YOLOv8 DECODER ---
 def decode_yolov8(output_layer):
-    # 1. Reshape 8400 outputs
     data = np.array(output_layer).reshape(6, 8400).transpose()
     
-    # 2. Filter by Class 1 (Occupied Space) & Confidence
-    # Note: data[4] is usually class 0, data[5] is class 1. 
-    # Adjust index '5' if your 'occupied' class ID is different.
+    # Filter by Class 1 (Occupied Space)
+    # Adjust index '5' if your 'occupied' class ID is different
     scores = data[:, 5] 
     mask = scores > CONFIDENCE_THRESHOLD
     if not np.any(mask): return []
@@ -35,12 +33,11 @@ def decode_yolov8(output_layer):
     filtered_scores = scores[mask]
     boxes = filtered_data[:, :4]
     
-    # 3. Convert Center-X/Y to Top-Left X/Y for OpenCV
-    # Boxes are [cx, cy, w, h] -> need [x, y, w, h]
+    # Convert Center-X/Y to Top-Left X/Y
     boxes[:, 0] = boxes[:, 0] - (boxes[:, 2] / 2)
     boxes[:, 1] = boxes[:, 1] - (boxes[:, 3] / 2)
     
-    # 4. NMS (Non-Maximum Suppression) to remove duplicates
+    # NMS (Non-Maximum Suppression)
     indices = cv2.dnn.NMSBoxes(
         bboxes=boxes.tolist(), 
         scores=filtered_scores.tolist(), 
@@ -66,7 +63,7 @@ class ParkingSystem:
         self.lock = threading.Lock()
         self.config = self.load_config()
         self.running = True
-        self.detections = [] # Store latest car detections
+        self.detections = [] 
         self.last_aws_time = 0
         self.aws_status = "Waiting..."
         
@@ -131,7 +128,7 @@ class ParkingSystem:
                 frame_cv = inRgb.getCvFrame()
                 frame_resized = cv2.resize(frame_cv, (640, 480))
                 
-                # 2. Get Detections (Real Math)
+                # 2. Get Detections
                 layer = inDet.getFirstLayerFp16()
                 self.detections = decode_yolov8(layer)
                 
@@ -143,11 +140,9 @@ class ParkingSystem:
                         
                         # Check if any car center is inside this spot
                         for det in self.detections:
-                            # det is [x,y,w,h] normalized
                             cx = (det[0] * 640) + (det[2] * 640 / 2)
                             cy = (det[1] * 480) + (det[3] * 480 / 2)
                             
-                            # Simple "Center in Box" check
                             if (spot['x'] < cx < spot['x'] + spot['w'] and 
                                 spot['y'] < cy < spot['y'] + spot['h']):
                                 is_occupied = True
@@ -158,12 +153,12 @@ class ParkingSystem:
                         if self.config.get('entrance'):
                             dist = np.sqrt((spot['x'] - self.config['entrance']['x'])**2 + 
                                            (spot['y'] - self.config['entrance']['y'])**2)
-                            dist = int(dist * 0.05) # Convert pixels to meters (approx)
+                            dist = int(dist * 0.05) 
 
                         status_batch.append({
                             'SpotID': spot['id'],
                             'Status': 'Occupied' if is_occupied else 'Available',
-                            'Distance': Decimal(str(dist)), # Use Decimal for DynamoDB
+                            'Distance': Decimal(str(dist)),
                             'Rate': Decimal(str(self.config.get('rate', 0.05)))
                         })
 
@@ -173,6 +168,7 @@ class ParkingSystem:
                     self.last_aws_time = time.time()
 
                 with self.lock:
+                    # Convert to RGB for Streamlit
                     self.frame = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
                 time.sleep(0.01)
 
@@ -190,9 +186,9 @@ class ParkingSystem:
             return self.frame.copy() if self.frame is not None else None
 
 # --- APP UI START ---
+st.set_page_config(page_title="Parking AI", layout="wide")
 system = ParkingSystem()
 
-st.set_page_config(page_title="Parking AI", layout="wide")
 st.title("Smart Parking System")
 
 # Status Bar
@@ -200,16 +196,25 @@ col1, col2 = st.columns(2)
 col1.metric("System Status", "Running")
 col2.metric("DynamoDB Sync", system.aws_status)
 
-mode = st.sidebar.radio("Operation Mode", ["Live Monitor", "Setup / Calibration"])
+# --- TABS FOR MODE SELECTION ---
+tab1, tab2 = st.tabs(["Live Monitor", "Setup & Calibration"])
 
-if mode == "Setup / Calibration":
-    st.info("Instructions: 1. Draw boxes on spots. 2. Click Save. (Double-click box to delete)")
-    frame = system.get_frame()
+with tab2:
+    st.header("Calibration")
+    st.info("1. Point camera at the screen. 2. Click 'Capture'. 3. Draw boxes. 4. Save.")
     
-    if frame is not None:
-        bg_img = Image.fromarray(frame)
+    # Capture Button
+    if st.button("Capture Current View for Setup"):
+        frame = system.get_frame()
+        if frame is not None:
+            # Save frame to session state to freeze it
+            st.session_state['frozen_frame'] = frame
+            
+    # Display Canvas if frame is captured
+    if 'frozen_frame' in st.session_state:
+        bg_img = Image.fromarray(st.session_state['frozen_frame'])
         
-        # Load existing spots into canvas
+        # Load existing spots
         init_draw = {"objects": []}
         if "spots" in system.config:
             for s in system.config['spots']:
@@ -219,7 +224,7 @@ if mode == "Setup / Calibration":
                     "stroke": "#00FF00", "strokeWidth": 2, "fill": "rgba(0,255,0,0.2)"
                 })
         
-        # Drawing Canvas
+        # Canvas
         canvas = st_canvas(
             fill_color="rgba(0, 255, 0, 0.2)",
             stroke_width=2, stroke_color="#00FF00",
@@ -242,23 +247,20 @@ if mode == "Setup / Calibration":
                 cfg = system.config
                 cfg["spots"] = new_spots
                 system.save_config(cfg)
-                st.success(f"Saved {len(new_spots)} spots! Reloading...")
-                time.sleep(1)
-                st.rerun()
+                st.success(f"Saved {len(new_spots)} spots!")
+    else:
+        st.warning("Click 'Capture Current View' to start drawing.")
 
-else:
-    # LIVE MONITOR
-    show_debug = st.sidebar.checkbox("Show AI Detections (Debug)", value=True)
+with tab1:
+    st.header("Live Feed")
+    show_debug = st.checkbox("Show AI Detections (Red Boxes)", value=True)
     
     placeholder = st.empty()
     while True:
         frame = system.get_frame()
         if frame is not None:
-            # Draw Overlays on top of the clean frame
-            # 1. Draw Parking Spots (Green/Red)
+            # Draw Overlays
             for spot in system.config.get('spots', []):
-                # We need to re-check occupancy here just for visual drawing
-                # (Or access the thread's last status if we stored it)
                 color = (0, 255, 0) # Green default
                 
                 # Check occupancy for color
@@ -275,16 +277,13 @@ else:
                 cv2.putText(frame, spot['id'], (spot['x'], spot['y']-5), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            # 2. Draw Raw AI Detections (If Debug is ON)
             if show_debug:
                 for det in system.detections:
-                    # det is [x,y,w,h]
                     x = int(det[0] * 640)
                     y = int(det[1] * 480)
                     w = int(det[2] * 640)
                     h = int(det[3] * 480)
                     cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 1)
-                    cv2.putText(frame, "CAR", (x, y-5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0,0,255), 1)
 
             placeholder.image(frame)
         time.sleep(0.1)
