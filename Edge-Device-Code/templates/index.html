@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Parking Setup</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+        .container { position: relative; display: inline-block; margin-top: 20px; border: 4px solid #333; }
+        canvas { position: absolute; top: 0; left: 0; cursor: crosshair; }
+        .panel { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 80%; margin: 0 auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background-color: #0056b3; }
+        input { padding: 5px; font-size: 16px; width: 80px; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <h2>🅿️ Parking Lot Calibration</h2>
+        <div>
+            <button onclick="setMode('entrance')">📍 1. Set Entrance</button>
+            <button onclick="setMode('spot')">🚗 2. Add Spot</button>
+            <button onclick="saveConfig()" style="background-color: #28a745;">💾 3. Save & Start</button>
+            <button onclick="clearConfig()" style="background-color: #dc3545;">❌ Reset</button>
+            <label style="margin-left: 15px;">Rate/Min ($): <input type="number" id="rate" value="0.05" step="0.01"></label>
+        </div>
+        <p id="status">Status: Viewing Live Feed</p>
+    </div>
+
+    <div class="container">
+        <img id="videoFeed" src="{{ url_for('video_feed') }}" width="640" height="480">
+        <canvas id="overlay" width="640" height="480"></canvas>
+    </div>
+
+    <script>
+        let canvas = document.getElementById('overlay');
+        let ctx = canvas.getContext('2d');
+        let mode = '';
+        let config = { entrance: null, spots: [], rate: 0.05 };
+
+        // Fetch existing config on load
+        fetch('/get_config').then(res => res.json()).then(data => {
+            if (data) { config = data; draw(); }
+        });
+
+        canvas.addEventListener('mousedown', function(e) {
+            let rect = canvas.getBoundingClientRect();
+            let x = e.clientX - rect.left;
+            let y = e.clientY - rect.top;
+
+            if (mode === 'entrance') {
+                config.entrance = {x: x, y: y};
+                document.getElementById('status').innerText = "Entrance Set!";
+                draw();
+            } else if (mode === 'spot') {
+                let spotId = prompt("Enter Spot ID (e.g., A1):", "A" + (config.spots.length + 1));
+                if(spotId) {
+                    // Default spot size 80x120 (adjustable logic can be added)
+                    config.spots.push({id: spotId, x: x - 40, y: y - 60, w: 80, h: 120}); 
+                    draw();
+                }
+            }
+        });
+
+        function setMode(m) { 
+            mode = m; 
+            document.getElementById('status').innerText = "Mode: " + (m === 'entrance' ? "Click Entrance Location" : "Click Center of Parking Spot");
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (config.entrance) {
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(config.entrance.x, config.entrance.y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.font = "16px Arial";
+                ctx.fillText("ENTRANCE", config.entrance.x - 30, config.entrance.y - 15);
+            }
+
+            config.spots.forEach(spot => {
+                ctx.strokeStyle = '#00d2ff';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(spot.x, spot.y, spot.w, spot.h);
+                ctx.fillStyle = '#00d2ff';
+                ctx.fillText(spot.id, spot.x + 5, spot.y + 20);
+            });
+        }
+
+        function saveConfig() {
+            config.rate = parseFloat(document.getElementById('rate').value);
+            fetch('/save_config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            }).then(() => alert("Configuration Saved! System is now automating DB updates."));
+        }
+
+        function clearConfig() {
+            if(confirm("Clear all calibration?")) {
+                config = { entrance: null, spots: [], rate: 0.05 };
+                draw();
+            }
+        }
+    </script>
+</body>
+</html>

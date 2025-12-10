@@ -12,7 +12,7 @@ import os
 MODEL_PATH = "models/parking_model.blob"  
 CONFIG_FILE = "parking_config.json"
 DYNAMO_TABLE_NAME = "ParkingData"         
-AWS_REGION = "ca-central-1"                  # Ensure this matches your AWS Region
+AWS_REGION = "ca-central-1"                  
 
 # --- AWS SETUP ---
 
@@ -70,7 +70,7 @@ def run_oak_d_thread():
     
     # Retry finding model if not immediately available
     if not os.path.exists(MODEL_PATH):
-        print(f"❌ Error: Model not found at {MODEL_PATH}")
+        print(f"Error: Model not found at {MODEL_PATH}")
         return
 
     pipeline = create_pipeline()
@@ -160,9 +160,9 @@ def update_aws(data):
         with table.batch_writer() as batch:
             for item in data:
                 batch.put_item(Item=item)
-        print("☁️ AWS Updated")
+        print(" AWS Updated")
     except Exception as e:
-        print(f"⚠️ AWS Update Failed: {e}")
+        print(f" AWS Update Failed: {e}")
 
 # --- FLASK ROUTES ---
 @app.route('/')
@@ -201,5 +201,5 @@ if __name__ == '__main__':
     t.start()
     
     # Start Web Server (Accessible on local network)
-    print("🚀 Server starting... Access at http://<RASPBERRY_PI_IP>:5000")
+    print("Server starting... Access at http://<RASPBERRY_PI_IP>:5000")
     app.run(host='0.0.0.0', port=5000, debug=False)

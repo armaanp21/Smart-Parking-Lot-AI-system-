@@ -3,7 +3,9 @@ val: valid/images
 test: test/images
 
 nc: 2
-names: ['space-empty', 'space-occupied']
+names: 
+  0: space-empty
+  1: space-occupied
 
 roboflow:
   workspace: naimul-projects
