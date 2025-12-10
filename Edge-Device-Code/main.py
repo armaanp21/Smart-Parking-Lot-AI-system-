@@ -197,6 +197,8 @@ def run_oak_d_thread():
             ret, buffer = cv2.imencode('.jpg', frame_resized)
             with lock:
                 frame_for_web = buffer.tobytes()
+            
+            time.sleep(0.01)
 
 def update_aws(data):
     try:
