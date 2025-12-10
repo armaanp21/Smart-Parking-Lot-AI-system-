@@ -31,9 +31,9 @@ class ParkingSystem:
         try:
             self.dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
             self.table = self.dynamodb.Table(DYNAMO_TABLE_NAME)
-            print("✅ AWS Connected")
+            print("AWS Connected")
         except:
-            print("⚠️ AWS Connection Failed")
+            print("AWS Connection Failed")
 
         # Start Camera Thread
         self.thread = threading.Thread(target=self.run_oak_d)
@@ -50,7 +50,7 @@ class ParkingSystem:
         self.config = new_config
         with open(CONFIG_FILE, 'w') as f:
             json.dump(new_config, f)
-        print("💾 Configuration Saved")
+        print("Configuration Saved")
 
     def run_oak_d(self):
         # 1. Pipeline Setup (YOLOv8 Logic)
@@ -135,7 +135,7 @@ class ParkingSystem:
 system = ParkingSystem()
 
 # --- STREAMLIT UI ---
-st.title("🅿️ Smart Parking Manager")
+st.title("Smart Parking Manager")
 
 # Sidebar Controls
 mode = st.sidebar.radio("Mode", ["Live Monitor", "Setup / Calibration"])
@@ -173,7 +173,7 @@ if mode == "Setup / Calibration":
         )
 
         # Save Logic
-        if st.button("💾 Save Configuration"):
+        if st.button("Save Configuration"):
             if canvas_result.json_data is not None:
                 new_spots = []
                 objects = canvas_result.json_data["objects"]
